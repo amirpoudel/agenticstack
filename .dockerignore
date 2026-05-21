@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Dev artifacts
+.git/
+.vscode/
+*.md
+mem0/
+history/

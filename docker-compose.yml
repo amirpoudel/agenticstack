@@ -1,0 +1,49 @@
+services:
+  agenticstack:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8848:8000"
+    env_file:
+      - .env
+    environment:
+      # Container-internal routing overrides — must point to service names, not localhost
+      LANGMEM_POSTGRES_HOST: langmem_postgres
+      # Fallback to no-index store if embeddings not configured
+      LLM_PROVIDER: ollama
+    depends_on:
+      langmem_postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── LangMem persistent store (PostgreSQL + pgvector) ─────────────────────
+
+  langmem_postgres:
+    image: ankane/pgvector:v0.5.1
+    restart: on-failure
+    shm_size: "128mb"
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: langmem
+      POSTGRES_DB: langmem
+      POSTGRES_PASSWORD: ${LANGMEM_POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD", "pg_isready", "-q", "-d", "langmem", "-U", "langmem"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - langmem_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "8432:5432"
+
+volumes:
+  langmem_postgres_data:
+    driver: local

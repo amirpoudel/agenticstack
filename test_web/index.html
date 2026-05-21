@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgenticStack - Test Dashboard</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Left Sidebar: Configuration -->
+        <aside class="sidebar left-sidebar">
+            <div class="sidebar-header">
+                <h2>⚙️ Configuration</h2>
+            </div>
+            
+            <div class="sidebar-content">
+                <!-- App Registration -->
+                <div class="config-section">
+                    <h3>App Setup</h3>
+                    
+                    <div class="form-group">
+                        <label>App Name</label>
+                        <input type="text" id="appName" value="property_agent" placeholder="e.g., property_agent">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Description</label>
+                        <textarea id="appDescription" placeholder="What does this agent do?">Real estate property search assistant</textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>System Prompt</label>
+                        <textarea id="systemPrompt" placeholder="Optional custom prompt"></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>User ID</label>
+                        <input type="text" id="userId" value="test_user_001" placeholder="e.g., test_user_001">
+                    </div>
+                    
+                    <button class="btn btn-primary" onclick="registerApp()">🔗 Register App</button>
+                    
+                    <div class="status-box" id="regStatus">Not registered</div>
+                </div>
+                
+                <!-- Default State -->
+                <div class="config-section">
+                    <h3>Default State</h3>
+                    <textarea id="appState" class="state-input">{"domain": "real_estate", "currency": "NPR", "language": "en"}</textarea>
+                </div>
+
+                <!-- Tools -->
+                <div class="config-section">
+                    <h3>🔧 Tools (JSON array)</h3>
+                    <textarea id="appTools" class="state-input" rows="6" placeholder="[]">[]</textarea>
+                </div>
+
+                <!-- Available Tools -->
+                <div class="config-section">
+                    <h3>📌 Registered Tools</h3>
+                    <div id="toolsList" class="tools-list">
+                        <p class="text-muted">Register an app to see tools</p>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Chat Area -->
+            <div class="chat-panel">
+                <div class="chat-header">
+                    <h2>💬 Chat Interface</h2>
+                    <div class="header-info">
+                        <span id="appStatus" class="badge badge-gray">Not connected</span>
+                    </div>
+                </div>
+                
+                <div class="messages-container" id="messagesContainer">
+                    <div class="welcome-message">
+                        <h3>Welcome to AgenticStack Test Dashboard</h3>
+                        <p>1. Configure your app on the left</p>
+                        <p>2. Click "Register App"</p>
+                        <p>3. Start chatting here</p>
+                    </div>
+                </div>
+                
+                <div class="chat-input-area">
+                    <input type="text" id="messageInput" class="message-input" placeholder="Type a message..." disabled>
+                    <button class="btn btn-send" onclick="sendMessage()" disabled>Send</button>
+                </div>
+            </div>
+        </main>
+
+        <!-- Right Sidebar: State & Debugging -->
+        <aside class="sidebar right-sidebar">
+            <div class="sidebar-header">
+                <h2>🔍 Debug Info</h2>
+            </div>
+            
+            <div class="sidebar-content">
+                <!-- Current State -->
+                <div class="debug-section">
+                    <h3>Current State</h3>
+                    <div id="currentState" class="json-box">
+                        <span class="text-muted">No state yet</span>
+                    </div>
+                </div>
+                
+                <!-- Current Turn -->
+                <div class="debug-section">
+                    <h3>Turn Information</h3>
+                    <div class="turn-info">
+                        <div class="info-row">
+                            <span class="label">Turn ID:</span>
+                            <span id="turnId" class="value monospace">-</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="label">App ID:</span>
+                            <span id="currentAppId" class="value monospace">-</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="label">User ID:</span>
+                            <span id="currentUserId" class="value monospace">-</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tool Calls -->
+                <div class="debug-section">
+                    <h3>Active Tool Calls</h3>
+                    <div id="toolCallsInfo" class="tool-calls-box">
+                        <p class="text-muted">No active tool calls</p>
+                    </div>
+                </div>
+                
+                <!-- Conversation Stats -->
+                <div class="debug-section">
+                    <h3>Conversation Stats</h3>
+                    <div class="stats">
+                        <div class="stat-item">
+                            <span class="stat-label">Messages:</span>
+                            <span id="messageCount" class="stat-value">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Tool Calls:</span>
+                            <span id="toolCallCount" class="stat-value">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Status:</span>
+                            <span id="conversationStatus" class="stat-value">idle</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Raw Response -->
+                <div class="debug-section">
+                    <h3>Raw Response</h3>
+                    <div id="rawResponse" class="json-box">
+                        <span class="text-muted">No response yet</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
