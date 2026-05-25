@@ -3,7 +3,7 @@ All Pydantic request / response schemas for AgenticStack.
 
 These are the ONLY contracts between AgenticStack and any calling application.
 No domain terms here — domain knowledge lives in the caller's toolSchemas
-and appContext.agentPersonality.
+and caller-defined prompts/tool schemas.
 
 Architecture:
   - AgenticStack manages ALL conversation history (working memory) and
@@ -28,7 +28,7 @@ class ToolSchema(BaseModel):
     name: str
     description: str
     parameters: Dict[str, Any]
-    required: List[str] = []
+    required: List[str] = Field(default_factory=list)
 
 
 #  App registration (simplified) 
@@ -37,13 +37,22 @@ class RegisterAppRequest(BaseModel):
     """
     Register an agent app with AgenticStack.
 
+    All behaviour is configured here — nothing is hardcoded in the stack.
+
     Fields:
-      appName      — unique name for this app (e.g. "charkilla")
-      description  — what this agent does; used as the system prompt base
-                     when no explicit systemPrompt is provided
-      systemPrompt — full custom system prompt (overrides description-based one)
-      tools        — tool schemas the LLM may call
-      state        — default state/context hints merged into every chat turn
+      appName        — unique name for this app
+        description    — optional app metadata (not used as runtime prompt)
+        systemPrompt   — full runtime system prompt used by the model
+      tools          — tool schemas the LLM may call; execution always happens
+                       in the calling app
+      state          — default state/context hints merged into every chat turn
+
+      # Per-app LLM overrides (all optional — fall back to global env vars)
+      llmProvider    — "groq" | "openai" | "azure" | "anthropic" | "ollama"
+      llmModel       — model name (e.g. "gpt-4o", "claude-3-5-sonnet-20241022")
+      llmTemperature — sampling temperature 0.0–2.0
+      memoryEnabled  — whether long-term memory is active for this app;
+                       defaults to the global MEMORY_ENABLED setting
     """
     appName: str
     description: str = ""
@@ -51,11 +60,26 @@ class RegisterAppRequest(BaseModel):
     tools: List[ToolSchema] = Field(default_factory=list)
     state: Dict[str, Any] = Field(default_factory=dict)
 
+    # Per-app overrides — fall back to global env var defaults when not set
+    llmTemperature: Optional[float] = None
+    memoryEnabled: Optional[bool] = None
+
 
 class RegisterAppResponse(BaseModel):
     appName: str
     toolCount: int
-    status: str  # "registered" | "already_registered"
+    status: str  # "registered" | "updated" | "deleted"
+
+
+class AppInfo(BaseModel):
+    """Full app config returned by GET /v1/apps and GET /v1/apps/{app_name}."""
+    appName: str
+    description: str
+    systemPrompt: Optional[str]
+    tools: List[ToolSchema]
+    state: Dict[str, Any]
+    llmTemperature: Optional[float]
+    memoryEnabled: Optional[bool]
 
 
 #  Chat request (the ONLY endpoint callers use per-message) 
@@ -64,13 +88,14 @@ class ChatRequest(BaseModel):
     """
     Chat request. AgenticStack handles history + memory internally.
 
-    Async webhook flow:
+    Webhook flow:
       1. Caller POSTs /v1/chat with callbackUrl → gets {status: "accepted"}
       2. AgenticStack processes in background
       3. AgenticStack POSTs result to callbackUrl as WebhookEvent
 
     userId should be a composite ID that includes tenant scope if needed,
     e.g. "tenant123_user456". AgenticStack treats it as an opaque string.
+    callbackUrl is required — all processing is asynchronous.
     """
     appId: str
     appName: Optional[str] = None
@@ -83,24 +108,21 @@ class ChatRequest(BaseModel):
         return (self.appName or self.appId or "").strip()
 
     # Webhook URL — AgenticStack will POST results here (tool_calls or reply).
-    # Required for async mode.
-    callbackUrl: Optional[str] = None
+    callbackUrl: str
 
     # Full system prompt from caller (business logic lives in the caller).
-    # When provided, AgenticStack uses this instead of building its own.
+    # When provided, AgenticStack uses this instead of the app-level system prompt.
     # AgenticStack still appends long-term memories.
     systemPrompt: Optional[str] = None
 
-    # Optional per-turn overrides (used only if systemPrompt is NOT provided)
-    userName: Optional[str] = None
-    userPhone: Optional[str] = None
-    isNewSession: bool = False
-    turnHints: Optional[List[str]] = None
-    memoryContext: Optional[Dict[str, Any]] = None
+    # Arbitrary caller-defined key/value pairs identifying or describing the user.
+    # Examples: {"plan": "pro", "locale": "en", "role": "admin"}
+    # These are injected into the runtime prompt under a USER CONTEXT block so
+    # the LLM can reference them. AgenticStack never interprets these keys.
+    userContext: Optional[Dict[str, Any]] = None
 
     # Optional per-turn agent state overrides merged into the graph runtime.
-    # Callers can use this to pass structured flags such as propertyType,
-    # listingType, locale, or any custom workflow hint.
+    # Callers can use this to pass structured workflow flags (e.g. mode, filters).
     state: Optional[Dict[str, Any]] = None
 
     # Opaque metadata — passed back unchanged in webhook events.
@@ -116,10 +138,11 @@ class ToolCall(BaseModel):
 
 class ChatResponse(BaseModel):
     """
-    Chat response. Three possible states:
-      - status="accepted"   → async mode; result will come via callbackUrl webhook
-      - status="reply"      → sync mode; reply contains the AI response
-      - status="tool_calls" → sync mode; toolCalls contains tools to execute
+    Chat response. Possible states:
+      - status="accepted"   → request accepted; result will come via callbackUrl webhook
+      - status="reply"      → final AI reply delivered via webhook
+      - status="tool_calls" → tool calls to execute, delivered via webhook
+      - status="error"      → processing error
     """
     status: Literal["accepted", "reply", "tool_calls", "error"]
     reply: Optional[str] = None
@@ -164,8 +187,8 @@ class ToolResultsRequest(BaseModel):
     userId: str
     turnId: str
     toolResults: List[ToolResult]
-    # Webhook URL for async mode — AgenticStack POSTs the next step here.
-    callbackUrl: Optional[str] = None
+    # Webhook URL — AgenticStack POSTs the next step here.
+    callbackUrl: str
     # Opaque metadata — passed back unchanged in webhook events.
     metadata: Optional[Dict[str, Any]] = None
 
@@ -175,7 +198,7 @@ class ToolResultsRequest(BaseModel):
 class MemoryResponse(BaseModel):
     userId: str
     summary: Optional[str] = None
-    facts: List[str] = []
+    facts: List[str] = Field(default_factory=list)
 
 
 class MemoryWriteRequest(BaseModel):

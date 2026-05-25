@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgenticStack — Test Client</title>
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<div class="layout">
+
+  <!-- LEFT: CONFIG -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="dot" id="backendDot"></div>
+      <h2>Configuration</h2>
+      <span id="backendBadge" class="badge badge-orange" style="margin-left:auto;font-size:10px">checking...</span>
+    </div>
+    <div class="panel-body">
+      <div class="section">
+        <div class="section-title">App Registration</div>
+        <div class="form-row"><label>App Name</label><input id="appName" value="property_agent"></div>
+        <div class="form-row">
+          <label>System Prompt</label>
+          <textarea id="sysPrompt" rows="6" placeholder="Enter full system prompt"></textarea>
+        </div>
+        <div class="form-row"><label>User ID</label><input id="userId" value="test_user_001"></div>
+      </div>
+      <div class="section">
+        <div class="section-title">Default State <span style="color:var(--text2);text-transform:none;font-size:10px;letter-spacing:0">(merged into every turn)</span></div>
+        <textarea id="appState" rows="4" style="font-family:monospace;font-size:11px"></textarea>
+      </div>
+      <div class="section">
+        <div class="section-title">Tools <span style="color:var(--text2);text-transform:none;font-size:10px;letter-spacing:0">(JSON array of tool schemas)</span></div>
+        <textarea id="appTools" rows="10" style="font-family:monospace;font-size:11px"></textarea>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" style="flex:1" onclick="registerApp()">⚡ Register App</button>
+        <button class="btn btn-ghost" onclick="loadDefaults()">Reset</button>
+      </div>
+      <div id="regStatus" style="font-size:11px;text-align:center;margin-top:2px"></div>
+    </div>
+  </div>
+
+  <!-- CENTER: CHAT -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="dot" id="chatDot"></div>
+      <h2>Chat</h2>
+      <span id="appBadge" class="badge badge-orange" style="margin-left:auto">not connected</span>
+    </div>
+    <div id="messages">
+      <div class="msg sys"><div class="msg-bubble">Register an app on the left to start chatting</div></div>
+    </div>
+    <div class="chat-input-row">
+      <input id="msgInput" placeholder="Type a message… (Enter to send)" disabled
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg()}">
+      <button class="btn btn-success" id="sendBtn" onclick="sendMsg()" disabled>Send</button>
+    </div>
+    <div id="statusBar">Idle</div>
+  </div>
+
+  <!-- RIGHT: DEBUG -->
+  <div class="panel">
+    <div class="panel-header"><h2>🔍 Live Debug</h2></div>
+    <div class="panel-body">
+      <div class="section">
+        <div class="section-title">Session</div>
+        <div class="kv"><span class="kk">App</span><span class="kv-val" id="dApp">—</span></div>
+        <div class="kv"><span class="kk">User</span><span class="kv-val" id="dUser">—</span></div>
+        <div class="kv"><span class="kk">Turn ID</span><span class="kv-val" id="dTurn">—</span></div>
+        <div class="kv"><span class="kk">Status</span><span id="dStatus" class="badge badge-orange">idle</span></div>
+        <div class="kv"><span class="kk">Messages</span><span class="kv-val" id="dMsgs">0</span></div>
+        <div class="kv"><span class="kk">Tool calls total</span><span class="kv-val" id="dTools">0</span></div>
+      </div>
+      <div class="section">
+        <div class="section-title">Active State</div>
+        <div class="json-view" id="dState">—</div>
+      </div>
+      <div class="section">
+        <div class="section-title">Registered Tools</div>
+        <div id="dToolsList"><span style="font-size:11px;color:var(--text2)">—</span></div>
+      </div>
+      <div class="section" style="flex:1;min-height:120px">
+        <div class="section-title">Event Log</div>
+        <div class="event-log" id="eventLog"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>

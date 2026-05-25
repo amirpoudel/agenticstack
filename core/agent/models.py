@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import DateTime, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -32,6 +32,11 @@ class RegisteredApp(Base):
     system_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     tools: Mapped[List[Dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
     state: Mapped[Dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+
+    # Per-app overrides — None means fall back to global env var defaults
+    llm_temperature: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    memory_enabled: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

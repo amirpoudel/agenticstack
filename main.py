@@ -8,6 +8,27 @@ from api.v1 import apps, chat, memory, health
 from config.settings import get_settings
 
 
+async def _check_ollama(base_url: str) -> None:
+    """Warn clearly if Ollama is unreachable — common on Docker when Ollama
+    only listens on 127.0.0.1 instead of 0.0.0.0."""
+    import httpx
+    log = logging.getLogger(__name__)
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            await client.get(f"{base_url.rstrip('/')}/api/tags")
+        log.info(f"[ollama] Reachable at {base_url}")
+    except Exception:
+        log.error(
+            f"\n{'='*60}\n"
+            f"  OLLAMA UNREACHABLE: {base_url}\n"
+            f"  Ollama only binds to 127.0.0.1 by default — Docker can't reach it.\n"
+            f"  Fix: restart Ollama with  OLLAMA_HOST=0.0.0.0\n"
+            f"    macOS:  launchctl setenv OLLAMA_HOST '0.0.0.0' && pkill ollama && ollama serve\n"
+            f"    Linux:  OLLAMA_HOST=0.0.0.0 ollama serve\n"
+            f"{'='*60}"
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
@@ -17,6 +38,9 @@ async def lifespan(app: FastAPI):
     from core.registry import init_app_registry_store, close_app_registry_store
     await init_memory_service()
     await init_app_registry_store()
+
+    if settings.llm_provider.lower() == "ollama":
+        await _check_ollama(settings.ollama_base_url)
 
     # Show the actual model/deployment name in use — for Azure this is the
     # deployment name, for other providers it's llm_model.

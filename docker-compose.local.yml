@@ -1,14 +1,3 @@
-# ================================================================
-# LOCAL DEVELOPMENT - docker-compose.local.yml
-# ================================================================
-# Usage: docker-compose -f docker-compose.local.yml up
-#
-# Features:
-# - Volume mounts for hot reload (code changes reflected instantly)
-# - Uvicorn --reload flag enabled
-# - Fast feedback loop for development
-# ================================================================
-
 services:
   agenticstack:
     build:
@@ -20,10 +9,16 @@ services:
       - .env
     environment:
       # Container-internal routing overrides — must point to service names, not localhost
+      APP_POSTGRES_HOST: app_postgres
       LANGMEM_POSTGRES_HOST: langmem_postgres
-      # Fallback to no-index store if embeddings not configured
-      LLM_PROVIDER: ollama
+      # On Docker Desktop (Mac/Windows) the host machine is host.docker.internal.
+      # "localhost" inside the container refers to the container itself, not the host.
+      # Uncomment if using Ollama (also requires: OLLAMA_HOST=0.0.0.0 on the host).
+      # LLM_PROVIDER: ollama
+      # OLLAMA_BASE_URL: http://host.docker.internal:11434
     depends_on:
+      app_postgres:
+        condition: service_healthy
       langmem_postgres:
         condition: service_healthy
     restart: unless-stopped
@@ -37,12 +32,33 @@ services:
     # Volume mounts for instant code changes
     volumes:
       - .:/app                    # Mount entire project
+      - /app/.venv                # Preserve venv built inside the image (uv sync)
       - /app/__pycache__          # Exclude Python cache
     
     # Enable uvicorn --reload for hot reload
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
-  # ── LangMem persistent store (PostgreSQL + pgvector) ─────────────────────
+  # ── App data (registered_apps table, conversation history) ───────────────
+
+  app_postgres:
+    image: postgres:16-alpine
+    restart: on-failure
+    shm_size: "128mb"
+    environment:
+      POSTGRES_USER: agenticstack
+      POSTGRES_DB: agenticstack
+      POSTGRES_PASSWORD: agenticstacksecret
+    healthcheck:
+      test: ["CMD", "pg_isready", "-q", "-d", "agenticstack", "-U", "agenticstack"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - app_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "8433:5432"
+
+  # ── LangMem memory store (PostgreSQL + pgvector) ─────────────────────────
 
   langmem_postgres:
     image: ankane/pgvector:v0.5.1
@@ -65,5 +81,7 @@ services:
       - "8432:5432"
 
 volumes:
+  app_postgres_data:
+    driver: local
   langmem_postgres_data:
     driver: local

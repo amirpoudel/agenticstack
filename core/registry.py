@@ -1,25 +1,21 @@
 """App registry backed by the `registered_apps` Postgres table.
 
-Each app registers once by a unique name.  On chat, the graph loads the
-app's config (tools, system prompt, default state) from this table.
+Apps are upserted on register and fully cached in memory on startup so that
+chat hot-paths never hit the DB.  Delete/update are supported at runtime.
 """
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import select, delete as sa_delete
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from api.models import RegisterAppRequest, ToolSchema
 from core.agent.models import RegisteredApp, get_session
 
 logger = logging.getLogger(__name__)
-
-
-class AlreadyRegisteredError(Exception):
-    """Raised when an app name is already in the registry."""
 
 
 @dataclass
@@ -31,6 +27,10 @@ class AppRegistration:
     system_prompt: Optional[str] = None
     tools: List[ToolSchema] = field(default_factory=list)
     state: Dict[str, Any] = field(default_factory=dict)
+
+    # Per-app overrides — None means fall back to global env var defaults
+    llm_temperature: Optional[float] = None
+    memory_enabled: Optional[bool] = None
 
     @property
     def tool_count(self) -> int:
@@ -44,74 +44,116 @@ class AppRegistration:
             system_prompt=row.system_prompt,
             tools=[ToolSchema(**t) for t in (row.tools or [])],
             state=dict(row.state or {}),
+            llm_temperature=row.llm_temperature,
+            memory_enabled=row.memory_enabled,
         )
 
 
 class AppRegistry:
-    """Registry with an in-memory cache (warm reads, DB writes)."""
+    """Registry with a warm in-memory cache.
+
+    * On startup all rows are loaded from DB (``warm_cache``).
+    * ``register`` upserts — never raises a duplicate error.
+    * ``update`` replaces an existing app's config.
+    * ``delete`` removes an app from both cache and DB.
+    * ``get`` / ``list_apps`` are cache-only after startup.
+    """
 
     def __init__(self) -> None:
         self._cache: Dict[str, AppRegistration] = {}
 
+    # ── Cache warm-up ─────────────────────────────────────────────────────────
+
+    async def warm_cache(self) -> None:
+        """Load all registered apps from DB into memory on startup."""
+        async with get_session() as session:
+            result = await session.execute(select(RegisteredApp))
+            rows = result.scalars().all()
+
+        self._cache = {row.app_name: AppRegistration.from_row(row) for row in rows}
+        logger.info(f"[registry] Warmed cache — {len(self._cache)} apps loaded")
+
     # ── Write ─────────────────────────────────────────────────────────────────
 
-    async def register(self, request: RegisterAppRequest) -> AppRegistration:
+    async def register(self, request: RegisterAppRequest) -> Tuple[AppRegistration, bool]:
+        """Upsert an app.  Returns (registration, created) where created=False means updated."""
         name = request.appName.strip()
         if not name:
             raise ValueError("appName is required")
 
-        if name in self._cache:
-            raise AlreadyRegisteredError(name)
+        tools_json = [t.model_dump(mode="json") for t in request.tools]
 
-        row = RegisteredApp(
-            app_name=name,
-            description=request.description,
-            system_prompt=request.systemPrompt,
-            tools=[t.model_dump(mode="json") for t in request.tools],
-            state=request.state,
+        stmt = (
+            pg_insert(RegisteredApp)
+            .values(
+                app_name=name,
+                description=request.description,
+                system_prompt=request.systemPrompt,
+                tools=tools_json,
+                state=request.state,
+                llm_temperature=request.llmTemperature,
+                memory_enabled=request.memoryEnabled,
+            )
+            .on_conflict_do_update(
+                index_elements=["app_name"],
+                set_={
+                    "description": request.description,
+                    "system_prompt": request.systemPrompt,
+                    "tools": tools_json,
+                    "state": request.state,
+                    "llm_temperature": request.llmTemperature,
+                    "memory_enabled": request.memoryEnabled,
+                },
+            )
+            .returning(RegisteredApp)
         )
 
+        created = name not in self._cache
+
         async with get_session() as session:
-            try:
-                session.add(row)
-                await session.commit()
-                await session.refresh(row)
-            except IntegrityError:
-                await session.rollback()
-                raise AlreadyRegisteredError(name)
+            result = await session.execute(stmt)
+            await session.commit()
+            row = result.scalar_one()
 
         reg = AppRegistration.from_row(row)
         self._cache[name] = reg
-        logger.info(f"[registry] Registered '{name}' — {reg.tool_count} tools")
+        action = "Registered" if created else "Updated"
+        logger.info(f"[registry] {action} '{name}' — {reg.tool_count} tools")
+        return reg, created
+
+    async def update(self, app_name: str, request: RegisterAppRequest) -> Optional[AppRegistration]:
+        """Update an existing app.  Returns None if the app does not exist."""
+        name = app_name.strip()
+        if name not in self._cache:
+            return None
+
+        # Reuse upsert path
+        reg, _ = await self.register(request)
         return reg
+
+    async def delete(self, app_name: str) -> bool:
+        """Delete an app from cache and DB.  Returns True if it existed."""
+        name = app_name.strip()
+        if name not in self._cache:
+            return False
+
+        async with get_session() as session:
+            await session.execute(
+                sa_delete(RegisteredApp).where(RegisteredApp.app_name == name)
+            )
+            await session.commit()
+
+        del self._cache[name]
+        logger.info(f"[registry] Deleted '{name}'")
+        return True
 
     # ── Read ──────────────────────────────────────────────────────────────────
 
     async def get(self, app_name: str) -> Optional[AppRegistration]:
-        name = app_name.strip()
-        if not name:
-            return None
-
-        if name in self._cache:
-            return self._cache[name]
-
-        async with get_session() as session:
-            result = await session.execute(
-                select(RegisteredApp).where(RegisteredApp.app_name == name)
-            )
-            row = result.scalar_one_or_none()
-
-        if row is None:
-            return None
-
-        reg = AppRegistration.from_row(row)
-        self._cache[name] = reg
-        return reg
+        return self._cache.get(app_name.strip())
 
     async def list_apps(self) -> List[str]:
-        async with get_session() as session:
-            result = await session.execute(select(RegisteredApp.app_name))
-            return [r for (r,) in result.all()]
+        return list(self._cache.keys())
 
 
 # ── Module-level singleton ────────────────────────────────────────────────────
@@ -120,20 +162,21 @@ _registry = AppRegistry()
 
 
 async def init_app_registry_store() -> None:
-    """Initialise the DB engine (called on FastAPI startup)."""
+    """Initialise the DB engine and warm the in-memory cache (called on FastAPI startup)."""
     from core.agent.models import init_db
     from config.settings import get_settings
 
     settings = get_settings()
     db_url = (
-        f"postgresql+psycopg://{settings.langmem_postgres_user}"
-        f":{settings.langmem_postgres_password}"
-        f"@{settings.langmem_postgres_host}"
-        f":{settings.langmem_postgres_port}"
-        f"/{settings.langmem_postgres_db}"
+        f"postgresql+psycopg://{settings.app_postgres_user}"
+        f":{settings.app_postgres_password}"
+        f"@{settings.app_postgres_host}"
+        f":{settings.app_postgres_port}"
+        f"/{settings.app_postgres_db}"
     )
     await init_db(db_url)
-    logger.info(f"[registry] DB ready → {settings.langmem_postgres_host}")
+    logger.info(f"[registry] DB ready → {settings.app_postgres_host}/{settings.app_postgres_db}")
+    await _registry.warm_cache()
 
 
 async def close_app_registry_store() -> None:

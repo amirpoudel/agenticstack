@@ -59,6 +59,14 @@ class Settings(BaseSettings):
     # OpenAI embedding key — falls back to openai_api_key if not set.
     openai_embedding_api_key: str = ""
 
+    # ── App database (registered_apps table, conversation history) ────────────
+    # Plain PostgreSQL — no pgvector needed.
+    app_postgres_host: str = "app_postgres"
+    app_postgres_port: int = 5432
+    app_postgres_db: str = "agenticstack"
+    app_postgres_user: str = "agenticstack"
+    app_postgres_password: str = "agenticstacksecret"
+
     # ── Memory (LangMem — LangGraph AsyncPostgresStore + pgvector) ───────────
     memory_enabled: bool = True
     langmem_postgres_host: str = "langmem_postgres"
