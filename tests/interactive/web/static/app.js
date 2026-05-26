@@ -1,4 +1,4 @@
-const S = { appId: null, userId: null, appState: null, ws: null, msgCount: 0, toolCount: 0, currentTurn: null, cards: {} };
+const S = { appId: null, userId: null, appState: null, structuredOutput: null, ws: null, msgCount: 0, toolCount: 0, currentTurn: null, cards: {}, lastStructuredResponse: null };
 
 document.addEventListener('DOMContentLoaded', () => { loadDefaults(); checkHealth(); setInterval(checkHealth, 15000); });
 
@@ -10,6 +10,7 @@ async function loadDefaults() {
   document.getElementById('sysPrompt').value = cfg.systemPrompt || '';
   document.getElementById('appState').value  = JSON.stringify(cfg.state || {}, null, 2);
   document.getElementById('appTools').value  = JSON.stringify(cfg.tools || [], null, 2);
+  document.getElementById('structuredOutput').value = cfg.structuredOutput ? JSON.stringify(cfg.structuredOutput, null, 2) : '';
 }
 
 async function checkHealth() {
@@ -27,11 +28,17 @@ async function checkHealth() {
 }
 
 async function registerApp() {
-  let stateVal, toolsVal;
+  let stateVal, toolsVal, structuredOutputVal;
   try { stateVal = JSON.parse(document.getElementById('appState').value || '{}'); }
   catch { return setReg('⚠ Invalid JSON in Default State', 'red'); }
   try { toolsVal = JSON.parse(document.getElementById('appTools').value || '[]'); }
   catch { return setReg('⚠ Invalid JSON in Tools', 'red'); }
+  try {
+    const rawStructuredOutput = document.getElementById('structuredOutput').value.trim();
+    structuredOutputVal = rawStructuredOutput ? JSON.parse(rawStructuredOutput) : null;
+  } catch {
+    return setReg('⚠ Invalid JSON in Structured Output', 'red');
+  }
 
   const appName = document.getElementById('appName').value.trim();
   const userId  = document.getElementById('userId').value.trim();
@@ -46,13 +53,14 @@ async function registerApp() {
         systemPrompt: document.getElementById('sysPrompt').value || null,
         state:        stateVal,
         tools:        toolsVal,
+        structuredOutput: structuredOutputVal,
       }),
     }).then(r => r.json());
 
     if (d.status === 'success') {
-      S.appId = appName; S.userId = userId; S.appState = stateVal;
+      S.appId = appName; S.userId = userId; S.appState = stateVal; S.structuredOutput = structuredOutputVal; S.lastStructuredResponse = null;
       setReg(`✓ ${d.registrationStatus} — ${d.toolCount} tool(s)`, 'green');
-      renderToolsList(toolsVal); connectWS(); updateDebug(); log('App registered', 'ok');
+      renderToolsList(toolsVal); connectWS(); updateDebug(); log(`App ${d.registrationStatus}`, 'ok');
     } else {
       setReg(`✗ ${d.error}`, 'red'); log(`Register failed: ${d.error}`, 'err');
     }
@@ -112,6 +120,7 @@ function sendMsg() {
     message: txt,
     state: S.appState,
     systemPrompt: systemPrompt || null,
+    structuredOutput: S.structuredOutput,
   }));
 }
 
@@ -148,6 +157,7 @@ function onWsMsg(msg) {
   }
 
   if (msg.type === 'reply') {
+    S.lastStructuredResponse = msg.structuredResponse ?? null;
     addMsg(msg.text, 'agent'); S.msgCount++;
     document.getElementById('msgInput').disabled = false;
     document.getElementById('sendBtn').disabled = false;
@@ -212,6 +222,9 @@ function updateDebug() {
   document.getElementById('dMsgs').textContent  = S.msgCount;
   document.getElementById('dTools').textContent = S.toolCount;
   if (S.appState) document.getElementById('dState').textContent = JSON.stringify(S.appState, null, 2);
+  else document.getElementById('dState').textContent = '—';
+  document.getElementById('dStructuredOutput').textContent = S.structuredOutput ? JSON.stringify(S.structuredOutput, null, 2) : '—';
+  document.getElementById('dStructuredResponse').textContent = S.lastStructuredResponse ? JSON.stringify(S.lastStructuredResponse, null, 2) : '—';
 }
 
 function renderToolsList(tools) {

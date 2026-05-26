@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import select, delete as sa_delete
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from api.models import RegisterAppRequest, ToolSchema
+from api.models import RegisterAppRequest, StructuredOutputSchema, ToolSchema
 from core.agent.models import RegisteredApp, get_session
 
 logger = logging.getLogger(__name__)
@@ -27,6 +27,7 @@ class AppRegistration:
     system_prompt: Optional[str] = None
     tools: List[ToolSchema] = field(default_factory=list)
     state: Dict[str, Any] = field(default_factory=dict)
+    structured_output: Optional[StructuredOutputSchema] = None
 
     # Per-app overrides — None means fall back to global env var defaults
     llm_temperature: Optional[float] = None
@@ -44,6 +45,7 @@ class AppRegistration:
             system_prompt=row.system_prompt,
             tools=[ToolSchema(**t) for t in (row.tools or [])],
             state=dict(row.state or {}),
+            structured_output=(StructuredOutputSchema(**row.structured_output) if row.structured_output else None),
             llm_temperature=row.llm_temperature,
             memory_enabled=row.memory_enabled,
         )
@@ -91,6 +93,7 @@ class AppRegistry:
                 system_prompt=request.systemPrompt,
                 tools=tools_json,
                 state=request.state,
+                structured_output=(request.structuredOutput.model_dump(mode="json") if request.structuredOutput else None),
                 llm_temperature=request.llmTemperature,
                 memory_enabled=request.memoryEnabled,
             )
@@ -101,6 +104,7 @@ class AppRegistry:
                     "system_prompt": request.systemPrompt,
                     "tools": tools_json,
                     "state": request.state,
+                    "structured_output": (request.structuredOutput.model_dump(mode="json") if request.structuredOutput else None),
                     "llm_temperature": request.llmTemperature,
                     "memory_enabled": request.memoryEnabled,
                 },

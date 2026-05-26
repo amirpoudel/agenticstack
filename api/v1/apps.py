@@ -87,6 +87,7 @@ async def list_apps(
                 systemPrompt=reg.system_prompt,
                 tools=reg.tools,
                 state=reg.state,
+                structuredOutput=reg.structured_output,
                 llmTemperature=reg.llm_temperature,
                 memoryEnabled=reg.memory_enabled,
             ))
@@ -112,6 +113,7 @@ async def get_app(
         systemPrompt=reg.system_prompt,
         tools=reg.tools,
         state=reg.state,
+        structuredOutput=reg.structured_output,
         llmTemperature=reg.llm_temperature,
         memoryEnabled=reg.memory_enabled,
     )

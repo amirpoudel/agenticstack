@@ -14,7 +14,10 @@ To add a new tool:
 """
 
 import json
+import logging
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # ── Tool schemas (sent to AgenticStack on app registration) ───────────────────
 
@@ -33,15 +36,15 @@ PROPERTY_TOOL_SCHEMAS: list[dict] = [
                 "listingType": {
                     "type": "string",
                     "enum": ["sale", "rent"],
-                    "description": "Buy or rent",
+                    "description": "Listing intent: sale or rent. Map user phrase 'buy' to 'sale'.",
                 },
                 "location": {"type": "string", "description": "City or area name"},
                 "maxPrice": {"type": "number", "description": "Max price in NPR"},
                 "minBedrooms": {"type": "integer", "description": "Min bedrooms"},
             },
-            "required": ["propertyType", "listingType"],
+            "required": [],
         },
-        "required": ["propertyType", "listingType"],
+        "required": [],
     },
     {
         "name": "get_property_details",
@@ -92,6 +95,17 @@ MOCK_PROPERTIES: list[dict[str, Any]] = [
         "description": "Newly built modern house with parking and garden.",
     },
     {
+        "slug": "house-sale-kathmandu-006",
+        "title": "Affordable 2BHK House in Kapan",
+        "propertyType": "house",
+        "listingType": "sale",
+        "location": "Kapan, Kathmandu",
+        "price": 9_500_000,
+        "bedrooms": 2,
+        "area": "3.5 aana",
+        "description": "Budget-friendly house suitable for small families.",
+    },
+    {
         "slug": "apartment-rent-patan-002",
         "title": "2BHK Apartment for Rent in Patan",
         "propertyType": "apartment",
@@ -135,6 +149,105 @@ MOCK_PROPERTIES: list[dict[str, Any]] = [
         "area": "1400 sqft",
         "description": "High-rise apartment with city views and gym.",
     },
+    {
+        "slug": "house-sale-lalitpur-007",
+        "title": "Family 3BHK House in Imadol",
+        "propertyType": "house",
+        "listingType": "sale",
+        "location": "Imadol, Lalitpur",
+        "price": 12_500_000,
+        "bedrooms": 3,
+        "area": "4 aana",
+        "description": "Well-maintained family house near schools and market.",
+    },
+    {
+        "slug": "apartment-sale-kathmandu-008",
+        "title": "Compact 2BHK Apartment in New Baneshwor",
+        "propertyType": "apartment",
+        "listingType": "sale",
+        "location": "New Baneshwor, Kathmandu",
+        "price": 8_800_000,
+        "bedrooms": 2,
+        "area": "980 sqft",
+        "description": "Affordable apartment close to offices and transport.",
+    },
+    {
+        "slug": "house-rent-lalitpur-009",
+        "title": "2.5 Storey House for Rent in Bhaisepati",
+        "propertyType": "house",
+        "listingType": "rent",
+        "location": "Bhaisepati, Lalitpur",
+        "price": 65_000,
+        "bedrooms": 4,
+        "area": "6 aana",
+        "description": "Spacious rental house with parking and terrace.",
+    },
+    {
+        "slug": "land-sale-bhaktapur-010",
+        "title": "Residential Land in Suryabinayak",
+        "propertyType": "land",
+        "listingType": "sale",
+        "location": "Suryabinayak, Bhaktapur",
+        "price": 6_500_000,
+        "bedrooms": 0,
+        "area": "2.5 aana",
+        "description": "Road-access land plot suitable for a small house.",
+    },
+    {
+        "slug": "commercial-rent-kathmandu-011",
+        "title": "Street-front Shop Space in Putalisadak",
+        "propertyType": "commercial",
+        "listingType": "rent",
+        "location": "Putalisadak, Kathmandu",
+        "price": 90_000,
+        "bedrooms": 0,
+        "area": "550 sqft",
+        "description": "High-footfall retail space ideal for showroom or office.",
+    },
+    {
+        "slug": "house-sale-bhaktapur-012",
+        "title": "Traditional Style 3BHK House in Madhyapur",
+        "propertyType": "house",
+        "listingType": "sale",
+        "location": "Madhyapur Thimi, Bhaktapur",
+        "price": 9_900_000,
+        "bedrooms": 3,
+        "area": "3.75 aana",
+        "description": "Move-in-ready home with easy access to ring road.",
+    },
+    {
+        "slug": "apartment-rent-kathmandu-013",
+        "title": "Modern 1BHK Apartment in Lazimpat",
+        "propertyType": "apartment",
+        "listingType": "rent",
+        "location": "Lazimpat, Kathmandu",
+        "price": 38_000,
+        "bedrooms": 1,
+        "area": "620 sqft",
+        "description": "Bright and modern apartment suitable for professionals.",
+    },
+    {
+        "slug": "house-sale-pokhara-014",
+        "title": "Lake-view 4BHK House in Pokhara",
+        "propertyType": "house",
+        "listingType": "sale",
+        "location": "Lakeside, Pokhara",
+        "price": 18_000_000,
+        "bedrooms": 4,
+        "area": "7 aana",
+        "description": "Premium house with mountain and lake views.",
+    },
+    {
+        "slug": "land-sale-kathmandu-015",
+        "title": "Corner Plot in Budhanilkantha",
+        "propertyType": "land",
+        "listingType": "sale",
+        "location": "Budhanilkantha, Kathmandu",
+        "price": 11_000_000,
+        "bedrooms": 0,
+        "area": "5 aana",
+        "description": "Peaceful residential plot in a growing neighborhood.",
+    },
 ]
 
 
@@ -143,33 +256,105 @@ MOCK_PROPERTIES: list[dict[str, Any]] = [
 _shortlists: dict[str, list] = {}
 
 
+def _normalize_listing_type(value: Any) -> str:
+    logger.info("[test-tools] _normalize_listing_type value=%s", value)
+    raw = str(value or "").strip().lower()
+    mapping = {
+        "buy": "sale",
+        "buy sale": "sale",
+        "buy/sale": "sale",
+        "for sale": "sale",
+        "sale": "sale",
+        "rent": "rent",
+        "rent in": "rent",
+        "rent out": "rent",
+        "rent-in": "rent",
+        "rent-out": "rent",
+        "rental": "rent",
+        "lease": "rent",
+    }
+    normalized = mapping.get(raw, raw)
+    logger.info("[test-tools] _normalize_listing_type normalized=%s", normalized)
+    return normalized
+
+
+def _normalize_property_type(value: Any) -> str:
+    logger.info("[test-tools] _normalize_property_type value=%s", value)
+    raw = str(value or "").strip().lower()
+    mapping = {
+        "house": "house",
+        "home": "house",
+        "villa": "house",
+        "land": "land",
+        "plot": "land",
+        "apartment": "apartment",
+        "apartments": "apartment",
+        "flat": "apartment",
+        "flats": "apartment",
+        "aparment": "apartment",
+        "appt": "apartment",
+        "commercial": "commercial",
+        "office": "commercial",
+        "shop": "commercial",
+        "commercial space": "commercial",
+    }
+    normalized = mapping.get(raw, raw)
+    logger.info("[test-tools] _normalize_property_type normalized=%s", normalized)
+    return normalized
+
+
+def _normalize_location(value: Any) -> str:
+    logger.info("[test-tools] _normalize_location value=%s", value)
+    text = str(value or "").strip().lower()
+    aliases = {
+        "kathamandu": "kathmandu",
+        "katmandu": "kathmandu",
+        "ktm": "kathmandu",
+    }
+    for src, dst in aliases.items():
+        text = text.replace(src, dst)
+    logger.info("[test-tools] _normalize_location normalized=%s", text)
+    return text
+
+
 def execute_tool(name: str, args: dict, user_id: str) -> str:
     """Execute a mock tool call and return a JSON string result.
 
     This runs inside the test client — AgenticStack only decides *when* and
     *with what args* to call a tool. Execution always lives here.
     """
+    logger.info("[test-tools] execute_tool name=%s user_id=%s args=%s", name, user_id, args)
     sl = _shortlists.setdefault(user_id, [])
 
     if name == "search_properties":
-        ptype = (args.get("propertyType") or "").lower()
-        ltype = (args.get("listingType") or "").lower()
-        loc   = (args.get("location") or "").lower()
+        ptype = _normalize_property_type(args.get("propertyType"))
+        ltype = _normalize_listing_type(args.get("listingType"))
+        loc = _normalize_location(args.get("location"))
         max_p = args.get("maxPrice")
         min_b = args.get("minBedrooms") or 0
         results = [
             p for p in MOCK_PROPERTIES
             if (not ptype or p["propertyType"] == ptype)
             and (not ltype or p["listingType"] == ltype)
-            and (not loc   or loc in p["location"].lower())
+            and (not loc or loc in _normalize_location(p["location"]))
             and (max_p is None or p["price"] <= max_p)
             and p["bedrooms"] >= min_b
         ]
+        logger.info(
+            "[test-tools] search_properties filters propertyType=%s listingType=%s location=%s maxPrice=%s minBedrooms=%s found=%s",
+            ptype,
+            ltype,
+            loc,
+            max_p,
+            min_b,
+            len(results),
+        )
         return json.dumps({"found": len(results), "properties": results})
 
     if name == "get_property_details":
         slug = args.get("slug", "")
         prop = next((p for p in MOCK_PROPERTIES if p["slug"] == slug), None)
+        logger.info("[test-tools] get_property_details slug=%s found=%s", slug, bool(prop))
         return json.dumps(prop if prop else {"error": f"Not found: {slug}"})
 
     if name == "shortlist_property":
@@ -177,9 +362,12 @@ def execute_tool(name: str, args: dict, user_id: str) -> str:
         note = args.get("note", "")
         if not any(s["slug"] == slug for s in sl):
             sl.append({"slug": slug, "note": note})
+        logger.info("[test-tools] shortlist_property slug=%s total=%s", slug, len(sl))
         return json.dumps({"shortlisted": slug, "total": len(sl)})
 
     if name == "get_shortlist":
+        logger.info("[test-tools] get_shortlist total=%s", len(sl))
         return json.dumps({"shortlist": sl, "total": len(sl)})
 
+    logger.info("[test-tools] unknown tool name=%s", name)
     return json.dumps({"error": f"Unknown tool: {name}"})

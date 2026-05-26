@@ -31,6 +31,14 @@ class ToolSchema(BaseModel):
     required: List[str] = Field(default_factory=list)
 
 
+class StructuredOutputSchema(BaseModel):
+    """JSON Schema-like structured output contract passed to the LLM."""
+
+    name: str = Field(default="structured_response")
+    description: str = Field(default="Structured response schema for the assistant")
+    schema: Dict[str, Any] = Field(default_factory=dict)
+
+
 #  App registration (simplified) 
 
 class RegisterAppRequest(BaseModel):
@@ -59,6 +67,7 @@ class RegisterAppRequest(BaseModel):
     systemPrompt: Optional[str] = None
     tools: List[ToolSchema] = Field(default_factory=list)
     state: Dict[str, Any] = Field(default_factory=dict)
+    structuredOutput: Optional[StructuredOutputSchema] = None
 
     # Per-app overrides — fall back to global env var defaults when not set
     llmTemperature: Optional[float] = None
@@ -78,6 +87,7 @@ class AppInfo(BaseModel):
     systemPrompt: Optional[str]
     tools: List[ToolSchema]
     state: Dict[str, Any]
+    structuredOutput: Optional[StructuredOutputSchema]
     llmTemperature: Optional[float]
     memoryEnabled: Optional[bool]
 
@@ -125,6 +135,10 @@ class ChatRequest(BaseModel):
     # Callers can use this to pass structured workflow flags (e.g. mode, filters).
     state: Optional[Dict[str, Any]] = None
 
+    # Optional per-turn structured output override. When present, this takes
+    # precedence over any app-level structuredOutput registration.
+    structuredOutput: Optional[StructuredOutputSchema] = None
+
     # Opaque metadata — passed back unchanged in webhook events.
     # Callers use this to carry request context (e.g. session ID, tenant info).
     metadata: Optional[Dict[str, Any]] = None
@@ -146,6 +160,7 @@ class ChatResponse(BaseModel):
     """
     status: Literal["accepted", "reply", "tool_calls", "error"]
     reply: Optional[str] = None
+    structuredResponse: Optional[Any] = None
     toolCalls: Optional[List[ToolCall]] = None
     turnId: Optional[str] = None
     error: Optional[str] = None
@@ -167,6 +182,7 @@ class WebhookEvent(BaseModel):
     userId: str
     turnId: Optional[str] = None
     reply: Optional[str] = None
+    structuredResponse: Optional[Any] = None
     toolCalls: Optional[List[ToolCall]] = None
     error: Optional[str] = None
     # Opaque metadata from original ChatRequest — passed back unchanged

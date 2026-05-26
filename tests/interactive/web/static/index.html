@@ -24,6 +24,10 @@
           <label>System Prompt</label>
           <textarea id="sysPrompt" rows="6" placeholder="Enter full system prompt"></textarea>
         </div>
+        <div class="form-row">
+          <label>Structured Output</label>
+          <textarea id="structuredOutput" rows="8" placeholder="Optional JSON object: {&quot;name&quot;: &quot;...&quot;, &quot;description&quot;: &quot;...&quot;, &quot;schema&quot;: {...}}" style="font-family:monospace;font-size:11px"></textarea>
+        </div>
         <div class="form-row"><label>User ID</label><input id="userId" value="test_user_001"></div>
       </div>
       <div class="section">
@@ -76,6 +80,14 @@
       <div class="section">
         <div class="section-title">Active State</div>
         <div class="json-view" id="dState">—</div>
+      </div>
+      <div class="section">
+        <div class="section-title">Structured Output</div>
+        <div class="json-view" id="dStructuredOutput">—</div>
+      </div>
+      <div class="section">
+        <div class="section-title">Last Structured Response</div>
+        <div class="json-view" id="dStructuredResponse">—</div>
       </div>
       <div class="section">
         <div class="section-title">Registered Tools</div>

@@ -28,4 +28,5 @@ DEFAULT_APP_CONFIG: dict = {
         "language": "en",
     },
     "tools": PROPERTY_TOOL_SCHEMAS,
+    "structuredOutput": None,
 }

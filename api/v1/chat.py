@@ -52,6 +52,7 @@ def _response_to_webhook_event(
             appId=app_id,
             userId=user_id,
             reply=resp.reply,
+            structuredResponse=resp.structuredResponse,
             metadata=metadata,
         )
     else:

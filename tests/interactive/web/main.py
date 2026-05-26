@@ -20,6 +20,8 @@ sys.path.insert(0, str(Path(__file__).parents[4]))
 import uvicorn
 import tests.interactive.web.server as _server
 
+logger = logging.getLogger(__name__)
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="AgenticStack interactive web test client")
@@ -36,13 +38,14 @@ def main() -> None:
     default_self_url = f"http://host.docker.internal:{args.port}"
     _server.SELF_URL  = (args.self_url or default_self_url).rstrip("/")
 
-    logging.basicConfig(level=logging.WARNING)
+    logging.basicConfig(level=logging.INFO, force=True)
+    logger.info("[test-main] starting interactive web client port=%s backend=%s self_url=%s", args.port, _server.BACKEND_API, _server.SELF_URL)
     print(f"\nAgenticStack — Interactive Web Test Client")
     print(f"  Dashboard   : http://localhost:{args.port}")
     print(f"  Backend     : {_server.BACKEND_API}")
     print(f"  Callback URL: {_server.SELF_URL}/callback/{{user_id}}\n")
 
-    uvicorn.run(_server.app, host="0.0.0.0", port=args.port, log_level="warning")
+    uvicorn.run(_server.app, host="0.0.0.0", port=args.port, log_level="info")
 
 
 if __name__ == "__main__":

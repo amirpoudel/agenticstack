@@ -3,14 +3,15 @@ SQLAlchemy async models for AgenticStack.
 
 The `registered_apps` table stores every app registered via POST /v1/apps/register.
 Each app has a unique name, an optional description, an optional system prompt,
-a list of tool schemas, and a default state dict.
+a list of tool schemas, a default state dict, and an optional structured output
+schema.
 """
 from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text, func, inspect, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -32,6 +33,7 @@ class RegisteredApp(Base):
     system_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     tools: Mapped[List[Dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
     state: Mapped[Dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    structured_output: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
 
     # Per-app overrides — None means fall back to global env var defaults
     llm_temperature: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -67,6 +69,15 @@ async def init_db(database_url: str) -> None:
     _session_factory = async_sessionmaker(_engine, expire_on_commit=False)
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        has_structured_output = await conn.run_sync(
+            lambda sync_conn: "structured_output" in {
+                col["name"] for col in inspect(sync_conn).get_columns("registered_apps")
+            }
+        )
+        if not has_structured_output:
+            await conn.execute(
+                text("ALTER TABLE registered_apps ADD COLUMN structured_output JSONB")
+            )
 
 
 async def close_db() -> None:
